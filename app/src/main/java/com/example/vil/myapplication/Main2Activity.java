@@ -1,10 +1,11 @@
 package com.example.vil.myapplication;
 
 import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.graphics.Bitmap;
+import android.icu.text.UnicodeSetSpanner;
 import android.os.Handler;
-import android.support.annotation.NonNull;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -13,6 +14,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.JsResult;
 import android.webkit.WebChromeClient;
@@ -20,7 +22,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Adapter;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -28,7 +30,6 @@ import android.widget.ListView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 
 public class Main2Activity extends AppCompatActivity {
     EditText et;
@@ -37,8 +38,10 @@ public class Main2Activity extends AppCompatActivity {
     Animation animTop;
     LinearLayout linear;
     ListView listView;
-    ArrayList<String> data;
+    ArrayList<Data> data;
     ArrayAdapter<String> adapter;
+    ArrayList<String> dataName;
+    Boolean sameSite = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,8 +53,30 @@ public class Main2Activity extends AppCompatActivity {
         dialog = new ProgressDialog(this);
         linear = (LinearLayout)findViewById(R.id.linear);
         listView = (ListView)findViewById(R.id.list_item);
+        data = new ArrayList<Data>();
+        dataName = new ArrayList<>();
 
-        adapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_single_choice, data);
+        adapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, dataName);
+        listView.setAdapter(adapter);
+
+
+        et.setInputType(0);
+
+        et.setOnClickListener(new View.OnClickListener() {
+
+            public void onClick(View v) {
+
+                // TODO Auto-generated method stub
+
+                et.setInputType(1);
+
+                InputMethodManager mgr = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+
+                mgr.showSoftInput(et, InputMethodManager.SHOW_IMPLICIT);
+
+            }
+
+        });
 
         webView.addJavascriptInterface(new JavaScriptMethods(), "MyApp");
 
@@ -76,7 +101,7 @@ public class Main2Activity extends AppCompatActivity {
             }
         });
 
-        webView.loadUrl("https://www.naver.com/");
+        webView.loadUrl("https://www.naver.com");
 
 
         WebSettings webSettings = webView.getSettings();
@@ -117,8 +142,38 @@ public class Main2Activity extends AppCompatActivity {
 
             }
         });
-        //
-        // linear.setAnimation(animTop);
+        linear.setAnimation(animTop);
+
+
+        listView.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
+            @Override
+            public boolean onItemLongClick(final AdapterView<?> parent, View view, final int position, long id) {
+                AlertDialog.Builder dlg = new AlertDialog.Builder(Main2Activity.this);
+                dlg.setTitle("즐겨찾기 삭제")
+                        .setMessage("삭제하겠습니까?")
+                        .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                data.remove(position);
+                                dataName.remove(position);
+                                adapter.notifyDataSetChanged();
+                            }
+                        }).setNegativeButton("Cancel", null)
+                        .show();
+
+
+                return false;
+            }
+        });
+
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                listView.setVisibility(View.INVISIBLE);
+                webView.setVisibility(View.VISIBLE);
+                webView.loadUrl("http://"+data.get(position).url);
+            }
+        });
 
     }
 
@@ -132,41 +187,21 @@ public class Main2Activity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if(item.getItemId()==1){
-            webView.setVisibility(View.VISIBLE);
-            listView.setVisibility(View.GONE);
             webView.loadUrl("file:///android_asset/www/urladd.html");
             linear.setAnimation(animTop);
             animTop.start();
-        }else{
-            webView.setVisibility(View.GONE);
+            listView.setVisibility(View.INVISIBLE);
+            linear.setVisibility(View.INVISIBLE);
+            webView.setVisibility(View.VISIBLE);
+        }else {
+            webView.setVisibility(View.INVISIBLE);
             listView.setVisibility(View.VISIBLE);
-            linear.setAnimation(animTop);
-            animTop.start();
         }
         return super.onOptionsItemSelected(item);
     }
 
     Handler myhandler = new Handler();
     class JavaScriptMethods {
-
-        @JavascriptInterface
-        public void saveData() {
-            myhandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    AlertDialog.Builder dlg = new AlertDialog.Builder(Main2Activity.this);
-                    dlg.setTitle("url저장")
-                            .setMessage("url을 변경하시겠습니까?")
-                            .setPositiveButton("OK", new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
-                                    //webView.loadUrl("javascript:siteAdd()");
-                                }
-                            }).setNegativeButton("Cancel", null)
-                            .show();
-                }
-            });
-        }
 
         @JavascriptInterface
         public void showUrl(){
@@ -177,18 +212,35 @@ public class Main2Activity extends AppCompatActivity {
                 }
             });
         }
+
+        @JavascriptInterface
+        public void saveUrl(final String name, final String urlAddr){
+            myhandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    sameSite = false;
+                    for(int i = 0; i<data.size(); i++){
+                        if(data.get(i).url.equals(urlAddr)){
+                            sameSite=true;
+                        }
+                    }
+
+                    if(sameSite){
+                        webView.loadUrl("javascript:displayMsg()");
+                    }else {
+                        data.add(new Data(name, urlAddr));
+                        dataName.add("<"+name+"> "+urlAddr);
+                        adapter.notifyDataSetChanged();
+                        Toast.makeText(getApplicationContext(), "추가되었습니다", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
+        }
+
     }
 
     public void onClick(View v){
-
-
+        webView.loadUrl("http://"+et.getText().toString());
     }
-
-    Comparator<String> dataAsc = new Comparator<String>() {
-        @Override
-        public int compare(String o1, String o2) {
-            return o1.compareToIgnoreCase(o2);
-        }
-    };
 
 }
